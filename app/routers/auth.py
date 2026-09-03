@@ -1,65 +1,137 @@
-from datetime import datetime, timedelta
-from jose import JWTError, jwt
-from passlib.context import CryptContext
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app import models
-
-router = APIRouter()
-
-# 🔐 SECRET
-SECRET_KEY = "your_secret_key"
-ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = 30
-
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+from app.models import User
+from app.schemas import UserCreate, UserResponse
+from app.security import (
+    hash_password,
+    verify_password,
+    create_access_token
+)
+from app.dependencies import get_current_user
 
 
-# 🔹 verify password
-def verify_password(plain, hashed):
-    return pwd_context.verify(plain, hashed)
+router = APIRouter(
+    prefix="/auth",
+    tags=["Authentication"]
+)
 
 
-# 🔹 authenticate user
-def authenticate_user(db: Session, email: str, password: str):
-    user = db.query(models.User).filter(models.User.email == email).first()
-    if not user:
-        return False
-    if not verify_password(password, user.password):
-        return False
-    return user
+# =========================
+# REGISTER
+# =========================
+
+@router.post(
+    "/register",
+    response_model=UserResponse,
+    status_code=status.HTTP_201_CREATED
+)
+def register(
+    user_data: UserCreate,
+    db: Session = Depends(get_db)
+):
+
+    # Check username or email
+    existing_user = db.query(User).filter(
+        (User.username == user_data.username) |
+        (User.email == user_data.email)
+    ).first()
+
+    if existing_user:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Username or email already exists"
+        )
+
+    # Hash password
+    hashed = hash_password(user_data.password)
+
+    # Create user
+    new_user = User(
+        username=user_data.username,
+        email=user_data.email,
+
+        # Your current model has both columns
+        password=hashed,
+        hashed_password=hashed,
+
+        is_admin=False
+    )
+
+    db.add(new_user)
+    db.commit()
+    db.refresh(new_user)
+
+    return new_user
 
 
-# 🔹 create JWT token
-def create_access_token(data: dict):
-    to_encode = data.copy()
-    expire = datetime.utcnow() + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
-    to_encode.update({"exp": expire})
-    return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
+# =========================
+# LOGIN
+# =========================
 
-
-# 🔥 IMPORTANT: correct response format
-@router.post("/auth/login")
+@router.post("/login")
 def login(
     form_data: OAuth2PasswordRequestForm = Depends(),
     db: Session = Depends(get_db)
 ):
-    user = authenticate_user(db, form_data.username, form_data.password)
+
+    # Find user
+    user = db.query(User).filter(
+        User.username == form_data.username
+    ).first()
 
     if not user:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid credentials"
+            detail="Invalid username or password"
         )
 
-    access_token = create_access_token(
-        data={"sub": user.email}
+    # Get stored hashed password
+    stored_password = (
+        user.hashed_password
+        or user.password
     )
 
+    if not stored_password:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid username or password"
+        )
+
+    # Verify password
+    if not verify_password(
+        form_data.password,
+        stored_password
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid username or password"
+        )
+
+    # Create JWT
+    token = create_access_token({
+        "user_id": user.id,
+        "is_admin": user.is_admin
+    })
+
     return {
-        "access_token": access_token,
+        "access_token": token,
         "token_type": "bearer"
     }
+
+
+# =========================
+# MY PROFILE
+# =========================
+
+@router.get(
+    "/me",
+    response_model=UserResponse
+)
+def get_my_profile(
+    current_user=Depends(get_current_user)
+):
+
+    return current_user

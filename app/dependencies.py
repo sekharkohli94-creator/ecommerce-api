@@ -4,7 +4,7 @@ from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.models import User
-from app.security import verify_token
+from app.security import decode_access_token
 
 
 oauth2_scheme = OAuth2PasswordBearer(
@@ -16,28 +16,34 @@ def get_current_user(
     token: str = Depends(oauth2_scheme),
     db: Session = Depends(get_db)
 ):
+    payload = decode_access_token(token)
 
-    user_id = verify_token(token)
+    if not payload:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid or expired token"
+        )
 
-    if user_id is None:
+    user_id = payload.get("user_id")
+
+    if not user_id:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid token"
         )
 
     user = db.query(User).filter(
-        User.id == int(user_id)
+        User.id == user_id
     ).first()
 
-    if user is None:
+    if not user:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
+            status_code=status.HTTP_401_UNAUTHORIZED,
             detail="User not found"
         )
 
     return user
 
-    
 
 def get_current_admin(
     current_user=Depends(get_current_user)

@@ -1,10 +1,10 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.database import get_db
+from app.models import Order,User
+from app.schemas import OrderResponse, OrderStatusUpdate
 from app.dependencies import get_current_admin
-from app.models import Order, User
-from app.schemas import OrderResponse
 
 
 router = APIRouter(
@@ -13,9 +13,9 @@ router = APIRouter(
 )
 
 
-# =========================================================
+# =========================
 # GET ALL ORDERS
-# =========================================================
+# =========================
 
 @router.get(
     "/",
@@ -23,25 +23,26 @@ router = APIRouter(
 )
 def get_all_orders(
     db: Session = Depends(get_db),
-    current_admin: User = Depends(get_current_admin)
+    current_admin=Depends(get_current_admin)
 ):
+
     orders = db.query(Order).all()
 
     return orders
 
 
-# =========================================================
-# GET SINGLE ORDER
-# =========================================================
+# =========================
+# GET ONE ORDER
+# =========================
 
 @router.get(
     "/{order_id}",
     response_model=OrderResponse
 )
-def get_order(
+def get_admin_order(
     order_id: int,
     db: Session = Depends(get_db),
-    current_admin: User = Depends(get_current_admin)
+    current_admin=Depends(get_current_admin)
 ):
 
     order = db.query(Order).filter(
@@ -50,25 +51,26 @@ def get_order(
 
     if not order:
         raise HTTPException(
-            status_code=404,
+            status_code=status.HTTP_404_NOT_FOUND,
             detail="Order not found"
         )
 
     return order
 
 
-# =========================================================
+# =========================
 # UPDATE ORDER STATUS
-# =========================================================
+# =========================
 
 @router.put(
-    "/{order_id}/status"
+    "/{order_id}/status",
+    response_model=OrderResponse
 )
 def update_order_status(
     order_id: int,
-    status: str,
+    status_data: OrderStatusUpdate,
     db: Session = Depends(get_db),
-    current_admin: User = Depends(get_current_admin)
+    current_admin=Depends(get_current_admin)
 ):
 
     order = db.query(Order).filter(
@@ -77,7 +79,7 @@ def update_order_status(
 
     if not order:
         raise HTTPException(
-            status_code=404,
+            status_code=status.HTTP_404_NOT_FOUND,
             detail="Order not found"
         )
 
@@ -89,19 +91,24 @@ def update_order_status(
         "cancelled"
     ]
 
-    if status not in valid_statuses:
+    if status_data.status not in valid_statuses:
         raise HTTPException(
-            status_code=400,
+            status_code=status.HTTP_400_BAD_REQUEST,
             detail="Invalid order status"
         )
 
-    order.status = status
+    order.status = status_data.status
 
-    db.commit()
-    db.refresh(order)
+    try:
+        db.commit()
+        db.refresh(order)
 
-    return {
-        "message": "Order status updated successfully",
-        "order_id": order.id,
-        "status": order.status
-    }
+    except Exception:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to update order status"
+        )
+
+    return order
+

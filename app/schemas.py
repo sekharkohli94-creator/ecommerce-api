@@ -1,44 +1,58 @@
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, EmailStr, ConfigDict, Field
 from typing import Optional, List
 
 
+# =========================
+# USER SCHEMAS
+# =========================
+
 class UserCreate(BaseModel):
-    username: str
+    username: str = Field(min_length=3, max_length=50)
     email: EmailStr
-    password: str
+    password: str = Field(min_length=6)
 
 
 class UserResponse(BaseModel):
     id: int
-    username: str
-    email: EmailStr
+    username: Optional[str] = None
+    email: Optional[EmailStr] = None
     is_admin: bool
 
-    class Config:
-        orm_mode = True
+    model_config = ConfigDict(from_attributes=True)
 
+
+# =========================
+# PRODUCT SCHEMAS
+# =========================
 
 class ProductCreate(BaseModel):
+    name: str = Field(min_length=1, max_length=100)
+    description: Optional[str] = None
+    price: float = Field(ge=0)
+    quantity: int = Field(ge=0)
+
+
+class ProductResponse(BaseModel):
+    id: int
     name: str
     description: Optional[str] = None
     price: float
-    stock: int   # ✅ FIXED
+    quantity: int
+
+    model_config = ConfigDict(from_attributes=True)
 
 
-class ProductResponse(ProductCreate):
-    id: int
-
-    class Config:
-        orm_mode = True
-
+# =========================
+# ORDER SCHEMAS
+# =========================
 
 class OrderItemCreate(BaseModel):
-    product_id: int
-    quantity: int
+    product_id: int = Field(gt=0)
+    quantity: int = Field(gt=0)
 
 
 class OrderCreate(BaseModel):
-    items: List[OrderItemCreate]
+    items: List[OrderItemCreate] = Field(min_length=1)
 
 
 class OrderItemResponse(BaseModel):
@@ -47,8 +61,7 @@ class OrderItemResponse(BaseModel):
     quantity: int
     price: float
 
-    class Config:
-        orm_mode = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class OrderResponse(BaseModel):
@@ -58,13 +71,16 @@ class OrderResponse(BaseModel):
     status: str
     items: List[OrderItemResponse]
 
-    class Config:
-        orm_mode = True
+    model_config = ConfigDict(from_attributes=True)
 
+
+# =========================
+# PAYMENT SCHEMAS
+# =========================
 
 class PaymentCreate(BaseModel):
-    order_id: int
-    payment_method: str
+    order_id: int = Field(gt=0)
+    payment_method: str = Field(min_length=2, max_length=30)
 
 
 class PaymentResponse(BaseModel):
@@ -74,5 +90,38 @@ class PaymentResponse(BaseModel):
     status: str
     payment_method: str
 
-    class Config:
-        orm_mode = True
+    model_config = ConfigDict(from_attributes=True)
+
+
+# =========================
+# ORDER STATUS
+# =========================
+
+class OrderStatusUpdate(BaseModel):
+    status: str = Field(min_length=2, max_length=30)
+
+
+# =========================
+# PAYMENT STATUS
+# =========================
+
+class PaymentStatusUpdate(BaseModel):
+    status: str = Field(min_length=2, max_length=30)
+
+
+# =========================
+# CART SCHEMAS
+# =========================
+
+class CartItemCreate(BaseModel):
+    product_id: int = Field(gt=0)
+    quantity: int = Field(gt=0)
+
+
+class CartItemResponse(BaseModel):
+    id: int
+    cart_id: int
+    product_id: int
+    quantity: int
+
+    model_config = ConfigDict(from_attributes=True)

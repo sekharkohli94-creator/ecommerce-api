@@ -1,20 +1,54 @@
 from fastapi import FastAPI
-from app.routers.auth import router as auth_router
-from app.routers.products import router as product_router
-from app.routers.orders import router as order_router
-from app.routers.payments import router as payment_router
-from app.routers.admin_orders import router as admin_order_router
 
-app = FastAPI(
-    title="E-Commerce Backend API"
+from app.routers import (
+    auth,
+    products,
+    orders,
+    payments,
+    admin_orders,cart,admin_products,admin_users
 )
 
-app.include_router(auth_router)
-app.include_router(product_router)
-app.include_router(order_router)
-app.include_router(payment_router)
-app.include_router(admin_order_router)
+
+app = FastAPI(
+    title="E-Commerce Backend API",
+    version="1.0.0"
+)
+
+
+# =========================
+# ROUTERS
+# =========================
+
+app.include_router(
+    auth.router
+)
+
+app.include_router(
+    products.router
+)
+
+app.include_router(
+    orders.router
+)
+
+app.include_router(
+    payments.router
+)
+
+app.include_router(
+    admin_orders.router
+)
+app.include_router(cart.router)
+app.include_router(admin_products.router)
+app.include_router(admin_users.router)
+
+# =========================
+# HOME
+# =========================
 
 @app.get("/")
 def home():
-    return {"message": "Welcome to E-Commerce API"}
+
+    return {
+        "message": "E-Commerce Backend API is running"
+    }
