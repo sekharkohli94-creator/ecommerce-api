@@ -7,7 +7,7 @@ from sqlalchemy.orm import sessionmaker, declarative_base
 load_dotenv()
 
 
-DATABASE_URL = os.getenv("DATABASE_URL","postgresql+psycopg2://rajasekhar:sekhar568@localhost:5432/ecommerce_db")
+DATABASE_URL = os.getenv("DATABASE_URL")
 
 if not DATABASE_URL:
     raise ValueError("DATABASE_URL is not set")
